@@ -19,5 +19,5 @@ EXPOSE 5000
 # Define environment variable
 ENV PORT 5000
 
-# Run clip_api.py when the container launches
-CMD ["python", "clip_api.py"]
+# Run the application using Gunicorn
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:$PORT", "clip_api:app"]
