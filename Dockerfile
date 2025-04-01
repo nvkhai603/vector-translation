@@ -19,5 +19,5 @@ EXPOSE 5000
 # Define environment variable
 ENV PORT 5000
 
-# Run the application using Gunicorn
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:$PORT", "clip_api:app"]
+# Run the application using Gunicorn (using shell form for env var substitution)
+CMD gunicorn --workers 4 --bind 0.0.0.0:$PORT clip_api:app
