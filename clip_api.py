@@ -131,7 +131,7 @@ def get_clip_vector_endpoint():
         try:
             vector = get_clip_vector(image, text)
             vector_list = vector.tolist()
-            return jsonify({'clip_vector': vector_list}) # Key updated
+            return jsonify({'vector': vector_list}) # Key updated
         except Exception as e:
             print(f"Error getting CLIP vector: {e}")
             return jsonify({'error': 'Failed to get CLIP vector'}), 500
@@ -173,7 +173,7 @@ def get_resnet_vector_endpoint():
         try:
             vector = get_resnet_vector(image)
             vector_list = vector.tolist()
-            return jsonify({'resnet_vector': vector_list})
+            return jsonify({'vector': vector_list})
         except Exception as e:
             print(f"Error getting ResNet vector: {e}")
             return jsonify({'error': 'Failed to get ResNet vector'}), 500
