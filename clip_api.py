@@ -62,9 +62,9 @@ def get_clip_vector(image, text):
     Returns:
         torch.Tensor: The CLIP vector.
     """
-    inputs = processor(text=[text], images=image, return_tensors="pt", padding=True)
+    inputs = clip_processor(text=[text], images=image, return_tensors="pt", padding=True) # Corrected variable name
     with torch.no_grad():
-        outputs = model(**inputs)
+        outputs = clip_model(**inputs) # Also ensure we use clip_model here
         # Use the image embeddings directly
         image_embeddings = outputs.image_embeds
     return image_embeddings
@@ -182,3 +182,6 @@ def get_resnet_vector_endpoint():
         return jsonify({'error': 'Could not obtain image'}), 500
 
 # Gunicorn will run the 'app' object directly
+# The following block is removed as Gunicorn handles server startup in production
+# if __name__ == '__main__':
+#     app.run(host='0.0.0.0', port=5000, debug=True)
