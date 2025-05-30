@@ -10,18 +10,40 @@ import torchvision.transforms as transforms
 
 app = Flask(__name__)
 
+# --- GPU/CPU Device Setup ---
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+if device.type == 'cuda':
+    print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+    print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+
 # --- CLIP Model Loading ---
 clip_model_name = "patrickjohncyh/fashion-clip"
-clip_model = CLIPModel.from_pretrained(clip_model_name)
-clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
-clip_model.eval()
+try:
+    clip_model = CLIPModel.from_pretrained(clip_model_name)
+    clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
+    clip_model.to(device)
+    clip_model.eval()
+    print(f"CLIP model loaded successfully on {device}")
+except Exception as e:
+    print(f"Error loading CLIP model: {e}")
+    clip_model = None
+    clip_processor = None
 
 # --- ResNet-50 Model Loading ---
-resnet_model = models.resnet50(pretrained=True)
-resnet_model.load_state_dict(torch.load('resnet50.pth'))
-# Remove the final classification layer to get features
-resnet_model = torch.nn.Sequential(*(list(resnet_model.children())[:-1]))
-resnet_model.eval()
+try:
+    resnet_model = models.resnet50(pretrained=True)
+    if os.path.exists('resnet50.pth'):
+        resnet_model.load_state_dict(torch.load('resnet50.pth', map_location=device))
+        print("Loaded ResNet-50 from local file")
+    # Remove the final classification layer to get features
+    resnet_model = torch.nn.Sequential(*(list(resnet_model.children())[:-1]))
+    resnet_model.to(device)
+    resnet_model.eval()
+    print(f"ResNet-50 model loaded successfully on {device}")
+except Exception as e:
+    print(f"Error loading ResNet-50 model: {e}")
+    resnet_model = None
 
 # --- ResNet-50 Image Transformations ---
 resnet_transform = transforms.Compose([
@@ -63,12 +85,23 @@ def get_clip_vector(image, text):
     Returns:
         torch.Tensor: The CLIP vector.
     """
-    inputs = clip_processor(text=[text], images=image, return_tensors="pt", padding=True) # Corrected variable name
-    with torch.no_grad():
-        outputs = clip_model(**inputs) # Also ensure we use clip_model here
-        # Use the image embeddings directly
-        image_embeddings = outputs.image_embeds
-    return image_embeddings
+    if clip_model is None or clip_processor is None:
+        raise RuntimeError("CLIP model not loaded")
+    
+    try:
+        inputs = clip_processor(text=[text], images=image, return_tensors="pt", padding=True)
+        # Move inputs to the same device as model
+        inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+        
+        with torch.no_grad():
+            outputs = clip_model(**inputs)
+            # Use the image embeddings directly
+            image_embeddings = outputs.image_embeds
+            # Move back to CPU for JSON serialization
+            return image_embeddings.cpu()
+    except Exception as e:
+        print(f"Error in get_clip_vector: {e}")
+        raise
 
 def get_resnet_vector(image):
     """Gets the ResNet-50 feature vector for a given image.
@@ -79,18 +112,25 @@ def get_resnet_vector(image):
     Returns:
         torch.Tensor: The ResNet-50 feature vector.
     """
-    # Ensure image is RGB
-    if image.mode != 'RGB':
-        image = image.convert('RGB')
+    if resnet_model is None:
+        raise RuntimeError("ResNet-50 model not loaded")
+    
+    try:
+        # Ensure image is RGB
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
 
-    img_t = resnet_transform(image)
-    batch_t = torch.unsqueeze(img_t, 0)
+        img_t = resnet_transform(image)
+        batch_t = torch.unsqueeze(img_t, 0).to(device)
 
-    with torch.no_grad():
-        features = resnet_model(batch_t)
-        # Flatten the features
-        vector = features.view(batch_t.size(0), -1)
-    return vector
+        with torch.no_grad():
+            features = resnet_model(batch_t)
+            # Flatten the features and move back to CPU
+            vector = features.view(batch_t.size(0), -1).cpu()
+        return vector
+    except Exception as e:
+        print(f"Error in get_resnet_vector: {e}")
+        raise
 
 # --- API Endpoints ---
 @app.route('/get_clip_vector', methods=['POST']) # Renamed for clarity

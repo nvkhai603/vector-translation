@@ -1,7 +1,9 @@
 transformers
 torch
+torchvision
 Pillow
 requests
 flask
 gunicorn
-torchvision
+psutil
+pynvml
